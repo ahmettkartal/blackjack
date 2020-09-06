@@ -3,8 +3,8 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use Illuminate\Support\Arr;
 use App\Game;
+use Illuminate\View\View;
 
 class GameRunner extends Controller
 {
@@ -13,31 +13,34 @@ class GameRunner extends Controller
     }
 
     public function startGame(Request $request){
+        // Create a game on database
         $game = new Game();
         $game->playerName =$request->name;
         $game->delay = 10;
         $game->deck = json_encode($this->createShuffledDeck(),true);
         $game->save();
+
+        // Define and save game decks
         $startDeck = $game->getStartDeck();
         $game->dealer_deck = json_encode($startDeck["dealer"]);
         $game->player_deck = json_encode($startDeck["player"]);
         $game->player_point = $game->calculateTotalPoint($startDeck["player"]);
         $game->dealer_point = $game->calculateTotalPoint($startDeck["dealer"]);
         $game->save();
+
+        // After save transaction redirect to game detail
         return redirect()->route('gameDetail', ['id' => $game->id]);
     }
 
+    /**
+    * @params Request
+     * @return View to game detail
+     */
     public function gameDetail(Request $request){
         $game = Game::where("id", $request->id)->first();
-        $dealerDeck = json_decode($game->dealer_deck);
-        // Hide 1 card from player
-        array_pop($dealerDeck);
-
-        $playerDeck = json_decode($game->player_deck);
-        $playerTotal = $game->player_point;
-        $dealerTotal = $game->dealer_point;
         $id = $request->id;
-        return view("game.detail",compact("dealerDeck", "playerDeck","dealerTotal","playerTotal","id"));
+        $playerName = $game->playerName;
+        return view("game.detail",compact("dealerDeck", "playerDeck","dealerTotal","playerTotal","id","playerName"));
     }
 
     /**
@@ -72,25 +75,104 @@ class GameRunner extends Controller
         return $gameDeck;
     }
 
+    /**
+    * @params Request
+     * @return Json object that includes game status to view
+     */
     public function gameStatus(Request $request){
         $game = Game::where("id",$request->id)->first();
-        if ($request->addCard == "true"){
-            $gameDeck = json_decode($game->deck);
-            $playerDeck = json_decode($game->player_deck );
-            array_push($playerDeck, array_shift($gameDeck));
-            $game->deck = json_encode($gameDeck);
-            $game->player_deck = json_encode($playerDeck);
-            $game->save();
+
+        // Control if game has ended before
+        if ($game->game_status == "finished"){
+            $dealerPoint = $game->dealerPoint();
+            $playerPoint = $game->playerPoint();
+
+            $status = [
+                "status" => "finished",
+                "dealerDeck" => $game->dealer_deck,
+                "playerDeck" => $game->player_deck,
+                "message" => "The Game Has Finished",
+                "winner" => $game->getWinner(),
+                "dealer_total" => $dealerPoint,
+                "player_total" => $playerPoint
+            ];
+            return json_encode($status);
         }
-        $gameDeck = json_decode($game->deck);
-        $playerDeck = json_decode($game->player_deck );
+
+        // Player wants more card
+        if ($request->continue == "true"){
+            $game->addCardToPlayer();
+            if ($game->calculateTotalPoint($game->player_deck) >= 21){
+                $game->game_status = "finished";
+                $game->save();
+                $status = [
+                    "status" => "finished",
+                    "dealerDeck" => $game->dealer_deck,
+                    "playerDeck" => $game->player_deck,
+                    "message" => "The Game Has Finished",
+                    "winner" => $game->getWinner(),
+                    "dealer_total" => $game->calculateTotalPoint() ,
+                    "player_total" => $game->calculateTotalPoint(json_decode($game->player_deck))
+                ];
+                return json_encode($status);
+            }else{
+                $game = Game::where("id",$request->id)->first();
+                // Hide one card of dealer
+                $dealerDeck = json_decode($game->dealer_deck);
+                array_shift($dealerDeck);
+                //Add back card to deck
+                $dealerDeck[] = ["name" => "back_card ml-5"];
+                $status = [
+                    "status" => "continue",
+                    "dealerDeck" => json_encode($dealerDeck),
+                    "playerDeck" => $game->player_deck,
+                    "message" => "Continue or Stay?",
+                    "winner" => "",
+                    "dealer_total" =>  $game->calculateTotalPoint(json_decode($game->dealer_deck)),
+                    "player_total" => $game->calculateTotalPoint(json_decode($game->player_deck))
+                ];
+                return json_encode($status);
+            }
+        }
+
+        // Game will end
+        if ($request->stay == "true"){
+            $game->game_status = "finished";
+            $game->save();
+            // Add card to dealer until total number bigger than 1
+            while ($game->dealerPoint() < 17) {
+                $game->addCardToDealer();
+            }
+
+            $game = Game::where("id",$request->id)->first();
+            $status = [
+                "status" => "finished",
+                "dealerDeck" => $game->dealer_deck,
+                "playerDeck" => $game->player_deck,
+                "message" => "The Game Has Finished",
+                "winner" => $game->getWinner(),
+                "dealer_total" => $game->dealerPoint(),
+                "player_total" => $game->playerPoint()
+            ];
+            return json_encode($status);
+        }
+
+        // Hide one card of dealer
         $dealerDeck = json_decode($game->dealer_deck);
+        array_shift($dealerDeck);
+        //Add back card to deck
+        $dealerDeck[] = ["name" => "back_card ml-5"];
 
-        $playerPoint = $game->calculateTotalPoint($playerDeck);
-        $dealerPoint = $game->calculateTotalPoint($dealerDeck);
-
-
-
+        $status = [
+            "status" => "continue",
+            "dealerDeck" => json_encode($dealerDeck),
+            "playerDeck" => $game->player_deck,
+            "message" => "Hit or Stay?",
+            "winner" => "",
+            "dealer_total" => $game->dealerPoint(),
+            "player_total" => $game->playerPoint()
+        ];
+        return json_encode($status);
     }
 
 

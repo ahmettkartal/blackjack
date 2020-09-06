@@ -322,6 +322,7 @@ body {
 .back_card{
     width: 71px;
     height: 97px;
+    background-image: url(http://yazilimhayati.com/img/back-card.jpg);
     background-position: center center;
     background-size: contain;
     background-repeat: no-repeat;

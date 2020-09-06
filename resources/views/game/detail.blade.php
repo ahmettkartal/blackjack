@@ -19,34 +19,42 @@
                 <h5>DEALER</h5>
             </div>
             <div class="dealer-cards">
-                @foreach($dealerDeck as $card)
-                    <div class="card {!! $card->name !!}"></div>
-                @endforeach
-                <div class="card back_card ml-5" style="background-image: url('{!! asset("assets/img/back-card.jpg") !!} ')"></div>
+
             </div>
 
         </div>
 
     </div>
+
+    <div class="row justify-content-center">
+        <div class="col-md-6 text-center">
+            <div class="title text-white mb-3 mt-3">
+                <h5>GAME {{ $id }}</h5>
+                <p>Dealer VS {!! ucfirst($playerName) !!}</p>
+                <p id="statusText"></p>
+                <p id="winner" class="hidden"></p>
+            </div>
+        </div>
+
+    </div>
+
     <div class="row justify-content-center ">
         <div class="col-md-6 text-center gamer ">
             <div class="title text-white mb-3 mt-3">
                 <h5>PLAYER</h5>
             </div>
             <div class="player-cards">
-                @foreach($playerDeck as $card)
-                    <div class="card {!! $card->name !!}"></div>
-                @endforeach
+
             </div>
             <div class="total text-white">Total:
-                <span class="total-player">{!! $playerTotal !!}</span>
+                <span class="total-player"></span>
             </div>
         </div>
     </div>
     <div class="row justify-content-center ">
         <div class="col-md-6 text-center mt-5">
-            <button id="stay" type="button" class="btn btn-success">Stay</button>
-            <button id="bust" type="button" class="btn btn-danger">Bust</button>
+            <button id="continue" type="button" class="btn btn-success">Continue</button>
+            <button id="stay" type="button" class="btn btn-danger">Stay</button>
 
         </div>
     </div>
@@ -61,31 +69,49 @@
 <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js" integrity="sha384-B4gt1jrGC7Jh4AgTPSdUtOBvfO8shuf57BaghqFfPlYxofvL8/KUEfYiJOMMV+rV" crossorigin="anonymous"></script>
 <script type="text/javascript">
    $(document).ready(function () {
-       getGameStatus();
+       let params = { _token: "{{ csrf_token() }}", id: "{{ $id }}"  };
+       getGameStatus(params);
    });
 
-   function getGameStatus (){
-       $.post( "{!! route("gameStatus") !!}", { _token: "{{ csrf_token() }}", id: "{{ $id }}"  })
-           .done(function( data ) {
-               alert( "Data Loaded: " + data );
-           });
-   }
+   $("#continue").click(function () {
+       let params =  { _token: "{{ csrf_token() }}", id: "{{ $id }}", continue:"true"};
+      getGameStatus(params);
+   });
 
    $("#stay").click(function () {
-       $.post( "{!! route("gameStatus") !!}", { _token: "{{ csrf_token() }}", id: "{{ $id }}", addCard:"true"  })
+       let params = { _token: "{{ csrf_token() }}", id: "{{ $id }}", stay:"true"};
+       getGameStatus(params);
+   });
+
+   function getGameStatus(params ){
+       $.post( "{!! route("gameStatus") !!}", params)
            .done(function( data ) {
-               alert( "Data Loaded: " + data );
+               let obj = JSON.parse(data);
+               $("#statusText").html(obj.message);
+
+               // Display winner if game has finished
+
+               if(obj.winner != ""){
+                   $("#winner").removeClass("hidden");
+                   $("#winner").html("Winner: "+obj.winner);
+               }
+
+               $('.total-player').html(obj.player_total);
+               $(".player-cards .card").remove();
+               $(".dealer-cards .card").remove();
+               let playerCards =JSON.parse(obj.playerDeck);
+               let dealerCards =JSON.parse(obj.dealerDeck);
+
+               for (let i in playerCards){
+                   $(".player-cards").prepend("<div class='card "+playerCards[i].name+"'></div>");
+               }
+
+               for (let i in dealerCards){
+                   $(".dealer-cards").prepend("<div class='card "+dealerCards[i].name+"'></div>");
+               }
+
            });
-   });
-
-   $("#bust").click(function () {
-
-   });
-
-    // $.get( "", { name: "John", time: "2pm" } )
-    //     .done(function( data ) {
-    //         alert( "Data Loaded: " + data );
-    //     });
+   }
 </script>
 </body>
 </html>
