@@ -40,7 +40,9 @@ class GameRunner extends Controller
         $game = Game::where("id", $request->id)->first();
         $id = $request->id;
         $playerName = $game->playerName;
-        return view("game.detail",compact("dealerDeck", "playerDeck","dealerTotal","playerTotal","id","playerName"));
+        $playerDeck = $game->playerDeck;
+        $dealerDeck = $game->dealerDeck;
+        return view("game.detail",compact("dealerDeck", "playerDeck","id","playerName"));
     }
 
     /**
